@@ -1,6 +1,6 @@
 ### Results of Tiny-YOLOv3
 
-<img src = "https://github.com/omair18/Tiny-Yolov3-OpenCV-Cpp/blob/master/data/yolo-img.png" width = 800 height = 600/>
+<img src = "https://github.com/omair18/Tiny-Yolov3-OpenCV-Cpp/blob/master/data/yolo-img.png" width = 960 height = 600/>
 
 
 ### Download the Models
