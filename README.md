@@ -1,4 +1,6 @@
-### Results of Tiny-YOLOv3
+### Tiny-YOLOv3
+
+OpenCV >= 3.4.5
 
 <img src = "https://github.com/omair18/Tiny-Yolov3-OpenCV-Cpp/blob/master/data/yolo-img.png" width = 960 height = 600/>
 
