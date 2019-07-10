@@ -1,6 +1,6 @@
 ### Results of Tiny-YOLOv3
 
-<img src = "https://github.com/gulshan-mittal/learnopencv/blob/dev1/ObjectDetection-YOLO/bird_yolo_out_py.jpg" width = 400 height = 300/>
+<img src = "https://github.com/omair18/Tiny-Yolov3-OpenCV-Cpp/blob/master/data/yolo-img.png" width = 400 height = 300/>
 
 
 ### Download the Models
