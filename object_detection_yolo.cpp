@@ -23,19 +23,82 @@ using namespace std::chrono;
 
 // Initialize the parameters
 float confThreshold = 0.5; // Confidence threshold
-float nmsThreshold = 0.4;  // Non-maximum suppression threshold
+float nmsThreshold = 0.5;  // Non-maximum suppression threshold
 int inpWidth = 416;  // Width of network's input image
 int inpHeight = 416; // Height of network's input image
 vector<string> classes;
 
 // Remove the bounding boxes with low confidence using non-maxima suppression
-void postprocess(Mat& frame, const vector<Mat>& out);
+void postprocess(Mat& frame, Mat& oldframe, const vector<Mat>& out);
 
 // Draw the predicted bounding box
 void drawPred(int classId, float conf, int left, int top, int right, int bottom, Mat& frame);
 
 // Get the names of the output layers
 vector<String> getOutputsNames(const Net& net);
+
+Size letterbox(Mat frame, int new_shape=416) {
+    // Mat frame = inputframe.clone();
+    int width = frame.cols;
+    int height = frame.rows;
+    // cout<<width << " hain? " << height<< endl;
+    float ratio = float(new_shape)/max(width, height);
+    float ratiow = ratio;
+    float ratioh = ratio;
+    // cout<<width*ratio << " " << height*ratio << endl;
+    int new_unpad0 = int(round(width*ratio));
+    int new_unpad1 = int(round(height * ratio));
+    int dw = ((new_shape - new_unpad0) % 32 )/2;
+    int dh = ((new_shape - new_unpad1) % 32 )/2;
+    int top = int(round(dh - 0.1));
+    int bottom = int(round(dh+0.1));
+    int left = int(round(dw - 0.1));
+    int right = int(round(dw + 0.1));
+
+    // cout<<" ---- "<< new_unpad0 <<  " " << new_unpad1<<endl;
+    cv::resize(frame, frame, cv::Size(new_unpad0, new_unpad1), 0, 0, 1); //CV_INTER_LINEAR = 1
+    Scalar value(127.5, 127.5, 127.5);
+    cv::copyMakeBorder(frame, frame, top, bottom, left, right, cv::BORDER_CONSTANT, value);
+    return frame.size();
+    
+}
+void scale_coords(Size img1, Size img0, Rect &box) {
+    int img00 = img0.height;
+    int img01 = img0.width;
+    int img10 = img1.height;
+    int img11 = img1.width;
+    //  cout<<"im1 ki shape " << img10 << " " << img11 << endl;
+    //  cout<<"im0 ki shape " << img00 << " " << img01 << endl;
+
+    int max0  = max(img00, img01);
+    int max1 = max(img10, img11);
+    double gain = double(max1)/double(max0);
+    // cout<<"Gain = " << gain << " " << max0 << " " << max1 << endl;
+
+    box.x = box.x - (img11 - (img01*gain))/2;
+    box.width = box.width - (img11 - (img01*gain))/2;
+    box.y = box.y - (img10 - (img00*gain))/2;
+    box.height = box.height - (img10 - (img00*gain))/2;
+
+    // cout<<"subtractions = " << box.x << " " << box.y << " " << box.width << " " << box.height << endl;
+
+    box.x = box.x/gain;
+    box.y = box.y/gain;
+    box.width = box.width/gain;
+    box.height = box.height/gain;
+
+    if (box.x < 0)
+        box.x = 0;
+    if (box.y < 0)
+        box.y = 0;
+    if (box.width < 0)
+        box.width = 0;
+    if (box.height < 0)
+        box.height = 0;
+    
+    // cout<<"after gain = " << box.x << " " << box.y << " " << box.width << " " << box.height << endl;
+
+}
 
 int main(int argc, char** argv)
 {
@@ -54,7 +117,7 @@ int main(int argc, char** argv)
     
     // Give the configuration and weight files for the model
     String modelConfiguration = "../cfg/yolov3-singleclass-tiny.cfg";
-    String modelWeights = "../weights/yolov3-tiny.weights";
+    String modelWeights = "/home/omair/workspace/CNN/hazen.ai/ultralytics/yolov3/weights/latest_retail.weights";
 
     // Load the network
     Net net = readNetFromDarknet(modelConfiguration, modelWeights);
@@ -109,12 +172,15 @@ int main(int argc, char** argv)
     namedWindow(kWinName, WINDOW_NORMAL);
     double alltimes = 0.0;
     double count = 0;
+    Mat oldframe;
+    Size sz;
 
     // Process frames.
     while (waitKey(1) < 0)
     {
         // get frame from the video
         cap >> frame;
+
 
         // Stop the program if reached end of video
         if (frame.empty()) {
@@ -123,9 +189,26 @@ int main(int argc, char** argv)
             waitKey(3000);
             break;
         }
-	std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+	    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
         // Create a 4D blob from a frame.
-        blobFromImage(frame, blob, 1/255.0, cvSize(inpWidth, inpHeight), Scalar(0,0,0), true, false);
+        cv::cvtColor(frame, frame, COLOR_BGR2RGB);
+
+        // cout<<"Before = "<< frame.size<< " " << frame.cols << " " << frame.rows<< endl;
+        oldframe = frame.clone();
+        sz = letterbox(frame, 416);
+        cout<<"After = "<< sz.width << " " << sz.height << endl;
+        cout<<frame.cols << " " << frame.rows << endl;
+        
+        // blobFromImage(frame, blob, 1/255.0, Size(inpWidth, inpHeight), Scalar(0,0,0), true, false);
+        // blobFromImage(frame, blob, 1/255.0, Size(frame.rows, frame.cols), Scalar(0,0,0), true, false);
+        blobFromImage(frame, blob, 1/255.0, Size(inpWidth, sz.height), Scalar(0,0,0), true, false);
+        
+
+        // cv::FileStorage file("some_name.txt", cv::FileStorage::WRITE);
+
+        // Write to file!
+        // file << "matName" << blob;
+        // cout<<blob.size()<<endl;
         
         //Sets the input to the network
         net.setInput(blob);
@@ -135,8 +218,8 @@ int main(int argc, char** argv)
         net.forward(outs, getOutputsNames(net));
         
         // Remove the bounding boxes with low confidence
-        postprocess(frame, outs);
-	std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+        postprocess(frame, oldframe, outs);
+	    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
         
         // Put efficiency information. The function getPerfProfile returns the overall time for inference(t) and the timings for each of the layers(in layersTimes)
         vector<double> layersTimes;
@@ -144,15 +227,16 @@ int main(int argc, char** argv)
         double t = net.getPerfProfile(layersTimes) / freq;
         string label = format("Inference time for a frame : %.2f ms", t);
         putText(frame, label, Point(0, 15), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0, 0, 255));
-	double duration = std::chrono::duration_cast<microseconds>( t2 - t1 ).count();
-	alltimes += duration;
-	count +=1;
+        double duration = std::chrono::duration_cast<microseconds>( t2 - t1 ).count();
+        alltimes += duration;
+        count +=1;
 
-	std::cout<< label << " chrono time  = " << duration/1000.0<<std::endl;
-        
+        std::cout<< label << " chrono time  = " << duration/1000.0<<std::endl;
+            
         // Write the frame with the detection boxes
         Mat detectedFrame;
         frame.convertTo(detectedFrame, CV_8U);
+        cv::cvtColor(detectedFrame,detectedFrame, COLOR_RGB2BGR);
         if (parser.has("image")) imwrite(outputFile, detectedFrame);
         else video.write(detectedFrame);
         
@@ -169,7 +253,7 @@ int main(int argc, char** argv)
 }
 
 // Remove the bounding boxes with low confidence using non-maxima suppression
-void postprocess(Mat& frame, const vector<Mat>& outs)
+void postprocess(Mat& frame, Mat& oldframe, const vector<Mat>& outs)
 {
     vector<int> classIds;
     vector<float> confidences;
@@ -198,8 +282,9 @@ void postprocess(Mat& frame, const vector<Mat>& outs)
                 int top = centerY - height / 2;
                 
                 classIds.push_back(classIdPoint.x);
-                confidences.push_back((float)confidence);
+                confidences.push_back((float)confidence); 
                 boxes.push_back(Rect(left, top, width, height));
+                //boxes.push_back(newbox);
             }
         }
     }
@@ -212,15 +297,26 @@ void postprocess(Mat& frame, const vector<Mat>& outs)
     {
         int idx = indices[i];
         Rect box = boxes[idx];
-        drawPred(classIds[idx], confidences[idx], box.x, box.y,
-                 box.x + box.width, box.y + box.height, frame);
+
+        // box.width = box.x + box.width;
+        // box.height = box.y + box.height;
+
+        // cout<<"Before = " << box.x << " " << box.y << " " << box.width << " " << box.height << endl;
+        
+        // scale_coords(frame.size(), oldframe.size(), box);
+        // cout<<"After = " << box.x << " " << box.y << " " << box.width << " " << box.height << endl;
+
+        drawPred(classIds[idx], confidences[idx], box.x, box.y, box.x + box.width, box.y + box.height, frame);
+        //drawPred(classIds[idx], confidences[idx], box.x, box.y, box.width, box.height, oldframe);
     }
 }
 
 // Draw the predicted bounding box
 void drawPred(int classId, float conf, int left, int top, int right, int bottom, Mat& frame)
 {
-    //Draw a rectangle displaying the bounding box
+    //Draw a rectangle displaying the bounding box/
+    
+    // cout<<"draww = " << left << " " << top << " " << right << " " << bottom << endl;
     rectangle(frame, Point(left, top), Point(right, bottom), Scalar(255, 178, 50), 3);
     
     //Get the label for the class name and its confidence
